@@ -1,0 +1,10 @@
+build/*
+!build/.gitkeep
+
+storage/*
+!storage/.gitkeep
+
+*.o
+*.a
+*.so
+*.log
