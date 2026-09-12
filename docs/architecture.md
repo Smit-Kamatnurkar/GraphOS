@@ -28,15 +28,15 @@ GraphOS aims to connect these concepts through a common graph model.
 
 Conceptually:
 
-```text
-                 SYSTEM
-                    |
-       +------------+------------+
-       |            |            |
-       v            v            v
-   DIRECTORY     PROCESS      DEVICE
-       |            |            |
-       v            |            |
-      FILE <--------+            |
-                    |            |
-                    +------------+
+flowchart TD
+    A[Graph Core] --> B[GraphFS / FUSE]
+    B --> C[graphctl]
+    B --> D[Process Monitor]
+    D --> A
+
+    A --> E[Resource Relationships]
+    E --> F[Linux 6.6 Integration]
+    F --> G[VFS / Files / Devices / Network]
+    G --> H[Graph-aware OS Services]
+    H --> I[Bootable GraphOS]
+    I --> J[QEMU]
