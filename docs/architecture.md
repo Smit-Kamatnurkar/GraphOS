@@ -2,32 +2,41 @@
 
 ## 1. Overview
 
-GraphOS is an experimental operating system based on a graph-oriented architecture.
+GraphOS is an experimental operating system built around a graph-based architecture.
 
-The fundamental design principle is that system objects and their relationships are represented as a graph.
+The central design principle of GraphOS is that operating-system objects and the relationships between those objects should be represented as a graph.
 
-Instead of treating files, processes, resources, devices, and services as completely independent objects, GraphOS represents them as interconnected nodes.
+Files, directories, processes, resources, devices, services, and applications can therefore be represented as nodes, while relationships between them are represented as edges.
 
-## 2. Core Architecture
+The graph is intended to become a fundamental system abstraction rather than simply an additional layer of metadata.
 
-The initial GraphOS architecture consists of:
+---
 
-- Graph Core
-- GraphFS
-- graphctl
-- Process Monitor
+## 2. Core Design Principle
 
-The long-term architecture will extend this graph model into the operating system kernel.
+Traditional operating systems expose different abstractions for different resources.
 
-## 3. Development Path
+For example:
 
-Graph Core
-→ GraphFS
-→ graphctl
-→ Process Graph
-→ Resource Graph
-→ Linux 6.6 Integration
-→ VFS and system resources
-→ Graph-aware OS services
-→ Bootable GraphOS
-→ QEMU
+- Files are accessed through filesystems.
+- Processes are managed by process-management mechanisms.
+- Devices are exposed through device interfaces.
+- Network resources are managed through networking subsystems.
+- Services communicate through separate IPC mechanisms.
+
+GraphOS aims to connect these concepts through a common graph model.
+
+Conceptually:
+
+```text
+                 SYSTEM
+                    |
+       +------------+------------+
+       |            |            |
+       v            v            v
+   DIRECTORY     PROCESS      DEVICE
+       |            |            |
+       v            |            |
+      FILE <--------+            |
+                    |            |
+                    +------------+
