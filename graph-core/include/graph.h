@@ -1,68 +1,163 @@
-#ifndef GRAPH_H
-#define GRAPH_H
+#include "../include/graph.h"
 
+#include <stdlib.h>
+#include <string.h>
 #include <stdint.h>
-#include <stddef.h>
 
-typedef enum {
-    NODE_SYSTEM,
-    NODE_DIRECTORY,
-    NODE_FILE,
-    NODE_PROCESS
-} NodeType;
+#define INITIAL_CAPACITY 16
 
-typedef enum {
-    EDGE_CONTAINS,
-    EDGE_USES,
-    EDGE_PARENT_OF
-} EdgeType;
+/*
+ * Duplicate a string without relying on POSIX strdup().
+ * The returned string is owned by the caller.
+ */
+static char *duplicate_string(const char *source)
+{
+    if (!source)
+        return NULL;
 
-typedef struct GraphNode {
-    uint64_t id;
-    NodeType type;
-    char *name;
-} GraphNode;
+    size_t length = strlen(source);
 
-typedef struct GraphEdge {
-    uint64_t id;
-    uint64_t source;
-    uint64_t target;
-    EdgeType type;
-} GraphEdge;
+    char *copy = malloc(length + 1);
 
-typedef struct Graph {
-    GraphNode **nodes;
-    size_t node_count;
-    size_t node_capacity;
+    if (!copy)
+        return NULL;
 
-    GraphEdge **edges;
-    size_t edge_count;
-    size_t edge_capacity;
+    memcpy(copy, source, length + 1);
 
-    uint64_t next_node_id;
-    uint64_t next_edge_id;
-} Graph;
+    return copy;
+}
 
-Graph *graph_create(void);
-void graph_destroy(Graph *graph);
+/*
+ * Validate a NodeType.
+ */
+static int valid_node_type(NodeType type)
+{
+    switch (type) {
+        case NODE_SYSTEM:
+        case NODE_DIRECTORY:
+        case NODE_FILE:
+        case NODE_PROCESS:
+            return 1;
 
-GraphNode *graph_add_node(
-    Graph *graph,
-    NodeType type,
-    const char *name
-);
+        default:
+            return 0;
+    }
+}
 
-GraphEdge *graph_add_edge(
-    Graph *graph,
-    uint64_t source,
-    uint64_t target,
-    EdgeType type
-);
+/*
+ * Validate an EdgeType.
+ */
+static int valid_edge_type(EdgeType type)
+{
+    switch (type) {
+        case EDGE_CONTAINS:
+        case EDGE_USES:
+        case EDGE_PARENT_OF:
+            return 1;
 
-GraphNode *graph_find_node(
-    Graph *graph,
-    uint64_t id
-);
+        default:
+            return 0;
+    }
+}
 
-#endif
+/*
+ * Grow the node pointer array.
+ */
+static int grow_nodes(Graph *graph)
+{
+    if (!graph)
+        return -1;
 
+    /*
+     * Prevent integer overflow when doubling capacity.
+     */
+    if (graph->node_capacity >
+        SIZE_MAX / 2 / sizeof(GraphNode *))
+        return -1;
+
+    size_t new_capacity = graph->node_capacity * 2;
+
+    GraphNode **new_nodes =
+        realloc(
+            graph->nodes,
+            new_capacity * sizeof(GraphNode *)
+        );
+
+    if (!new_nodes)
+        return -1;
+
+    graph->nodes = new_nodes;
+    graph->node_capacity = new_capacity;
+
+    return 0;
+}
+
+/*
+ * Grow the edge pointer array.
+ */
+static int grow_edges(Graph *graph)
+{
+    if (!graph)
+        return -1;
+
+    /*
+     * Prevent integer overflow when doubling capacity.
+     */
+    if (graph->edge_capacity >
+        SIZE_MAX / 2 / sizeof(GraphEdge *))
+        return -1;
+
+    size_t new_capacity = graph->edge_capacity * 2;
+
+    GraphEdge **new_edges =
+        realloc(
+            graph->edges,
+            new_capacity * sizeof(GraphEdge *)
+        );
+
+    if (!new_edges)
+        return -1;
+
+    graph->edges = new_edges;
+    graph->edge_capacity = new_capacity;
+
+    return 0;
+}
+
+/*
+ * Create an empty graph.
+ */
+Graph *graph_create(void)
+{
+    Graph *graph = malloc(sizeof(Graph));
+
+    if (!graph)
+        return NULL;
+
+    graph->nodes =
+        calloc(
+            INITIAL_CAPACITY,
+            sizeof(GraphNode *)
+        );
+
+    graph->edges =
+        calloc(
+            INITIAL_CAPACITY,
+            sizeof(GraphEdge *)
+        );
+
+    if (!graph->nodes || !graph->edges) {
+        free(graph->nodes);
+        free(graph->edges);
+        free(graph);
+        return NULL;
+    }
+
+    graph->node_count = 0;
+    graph->node_capacity = INITIAL_CAPACITY;
+
+    graph->edge_count = 0;
+    graph->edge_capacity = INITIAL_CAPACITY;
+
+    /*
+     * IDs start at
