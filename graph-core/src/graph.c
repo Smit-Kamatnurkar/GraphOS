@@ -417,3 +417,274 @@ GraphNode *graph_find_node(
 
     return NULL;
 }
+
+/*
+ * Delete a node by its ID.
+ *
+ * First removes every edge that references the node
+ * (as source or target), then removes the node itself
+ * and frees its memory.
+ */
+int graph_delete_node(
+    Graph *graph,
+    uint64_t id
+)
+{
+    size_t i;
+    int found;
+
+    if (!graph)
+        return -1;
+
+    if (id == 0)
+        return -1;
+
+    /*
+     * Remove every edge that touches this node.
+     * Walk backwards so that index removal is safe.
+     */
+    for (i = graph->edge_count; i > 0; i--) {
+        if (graph->edges[i - 1] &&
+            (graph->edges[i - 1]->source == id ||
+             graph->edges[i - 1]->target == id)) {
+
+            free(graph->edges[i - 1]);
+
+            /*
+             * Shift the remaining edges down.
+             */
+            memmove(
+                &graph->edges[i - 1],
+                &graph->edges[i],
+                (graph->edge_count - i) * sizeof(GraphEdge *)
+            );
+
+            graph->edge_count--;
+        }
+    }
+
+    /*
+     * Find and remove the node.
+     */
+    found = 0;
+
+    for (i = 0; i < graph->node_count; i++) {
+        if (graph->nodes[i] &&
+            graph->nodes[i]->id == id) {
+
+            free(graph->nodes[i]->name);
+            free(graph->nodes[i]);
+
+            /*
+             * Shift the remaining nodes down.
+             */
+            memmove(
+                &graph->nodes[i],
+                &graph->nodes[i + 1],
+                (graph->node_count - i - 1) * sizeof(GraphNode *)
+            );
+
+            graph->node_count--;
+            found = 1;
+            break;
+        }
+    }
+
+    return found ? 0 : -1;
+}
+
+/*
+ * Delete an edge by its ID.
+ */
+int graph_delete_edge(
+    Graph *graph,
+    uint64_t id
+)
+{
+    size_t i;
+
+    if (!graph)
+        return -1;
+
+    if (id == 0)
+        return -1;
+
+    for (i = 0; i < graph->edge_count; i++) {
+        if (graph->edges[i] &&
+            graph->edges[i]->id == id) {
+
+            free(graph->edges[i]);
+
+            /*
+             * Shift the remaining edges down.
+             */
+            memmove(
+                &graph->edges[i],
+                &graph->edges[i + 1],
+                (graph->edge_count - i - 1) * sizeof(GraphEdge *)
+            );
+
+            graph->edge_count--;
+            return 0;
+        }
+    }
+
+    return -1;
+}
+
+/*
+ * Free a NodeList returned by a query function.
+ * Does NOT free the nodes themselves.
+ */
+void graph_node_list_free(NodeList *list)
+{
+    if (!list)
+        return;
+
+    free(list->items);
+    free(list);
+}
+
+/*
+ * Return every node that is the target of an edge
+ * whose source is the given node ID.
+ *
+ * Returns an empty list (count == 0) when the node
+ * exists but has no outgoing edges.
+ */
+NodeList *graph_find_children(
+    Graph *graph,
+    uint64_t id
+)
+{
+    NodeList *list;
+    GraphNode *target;
+    size_t i;
+    size_t capacity;
+
+    if (!graph)
+        return NULL;
+
+    if (id == 0)
+        return NULL;
+
+    if (!graph_find_node(graph, id))
+        return NULL;
+
+    list = malloc(sizeof(NodeList));
+
+    if (!list)
+        return NULL;
+
+    capacity = 4;
+
+    list->items = malloc(capacity * sizeof(GraphNode *));
+
+    if (!list->items) {
+        free(list);
+        return NULL;
+    }
+
+    list->count = 0;
+
+    for (i = 0; i < graph->edge_count; i++) {
+        if (graph->edges[i] &&
+            graph->edges[i]->source == id) {
+
+            target = graph_find_node(
+                graph,
+                graph->edges[i]->target
+            );
+
+            if (!target)
+                continue;
+
+            /*
+             * Grow the items array if needed.
+             */
+            if (list->count >= capacity) {
+                GraphNode **new_items;
+
+                if (capacity > SIZE_MAX / 2) {
+                    graph_node_list_free(list);
+                    return NULL;
+                }
+
+                capacity *= 2;
+
+                new_items = realloc(
+                    list->items,
+                    capacity * sizeof(GraphNode *)
+                );
+
+                if (!new_items) {
+                    graph_node_list_free(list);
+                    return NULL;
+                }
+
+                list->items = new_items;
+            }
+
+            list->items[list->count++] = target;
+        }
+    }
+
+    return list;
+}
+
+/*
+ * Return the first node that is the source of an
+ * edge whose target is the given node ID.
+ */
+GraphNode *graph_find_parent(
+    Graph *graph,
+    uint64_t id
+)
+{
+    size_t i;
+
+    if (!graph)
+        return NULL;
+
+    if (id == 0)
+        return NULL;
+
+    for (i = 0; i < graph->edge_count; i++) {
+        if (graph->edges[i] &&
+            graph->edges[i]->target == id) {
+
+            return graph_find_node(
+                graph,
+                graph->edges[i]->source
+            );
+        }
+    }
+
+    return NULL;
+}
+
+/*
+ * Find the first node whose name matches the given
+ * string (exact, case-sensitive match).
+ */
+GraphNode *graph_find_node_by_name(
+    Graph *graph,
+    const char *name
+)
+{
+    size_t i;
+
+    if (!graph || !name)
+        return NULL;
+
+    for (i = 0; i < graph->node_count; i++) {
+        if (graph->nodes[i] &&
+            graph->nodes[i]->name &&
+            strcmp(graph->nodes[i]->name, name) == 0) {
+
+            return graph->nodes[i];
+        }
+    }
+
+    return NULL;
+}

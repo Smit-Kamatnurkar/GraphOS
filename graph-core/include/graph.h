@@ -1,163 +1,203 @@
-#include "../include/graph.h"
+#ifndef GRAPH_H
+#define GRAPH_H
 
-#include <stdlib.h>
-#include <string.h>
+#include <stddef.h>
 #include <stdint.h>
 
-#define INITIAL_CAPACITY 16
+/*
+ * Node types supported by the Graph Core.
+ *
+ * SYSTEM      The root node representing the operating system.
+ * DIRECTORY   A directory in the filesystem.
+ * FILE        A file in the filesystem.
+ * PROCESS     A running process.
+ */
+typedef enum {
+    NODE_SYSTEM,
+    NODE_DIRECTORY,
+    NODE_FILE,
+    NODE_PROCESS
+} NodeType;
 
 /*
- * Duplicate a string without relying on POSIX strdup().
- * The returned string is owned by the caller.
+ * Edge types supported by the Graph Core.
+ *
+ * CONTAINS    Containment relationship (e.g. directory contains file).
+ * USES        Resource usage (e.g. process uses file).
+ * PARENT_OF   Parent-child relationship (e.g. process hierarchy).
  */
-static char *duplicate_string(const char *source)
-{
-    if (!source)
-        return NULL;
-
-    size_t length = strlen(source);
-
-    char *copy = malloc(length + 1);
-
-    if (!copy)
-        return NULL;
-
-    memcpy(copy, source, length + 1);
-
-    return copy;
-}
+typedef enum {
+    EDGE_CONTAINS,
+    EDGE_USES,
+    EDGE_PARENT_OF
+} EdgeType;
 
 /*
- * Validate a NodeType.
+ * A node in the graph.
+ *
+ * Each node has a unique non-zero ID, a type, and a
+ * human-readable name.  The name is owned by the Graph
+ * and freed when the node is destroyed.
  */
-static int valid_node_type(NodeType type)
-{
-    switch (type) {
-        case NODE_SYSTEM:
-        case NODE_DIRECTORY:
-        case NODE_FILE:
-        case NODE_PROCESS:
-            return 1;
-
-        default:
-            return 0;
-    }
-}
+typedef struct {
+    uint64_t  id;
+    NodeType  type;
+    char     *name;
+} GraphNode;
 
 /*
- * Validate an EdgeType.
+ * A directed edge between two nodes.
+ *
+ * Each edge has a unique non-zero ID, a source node,
+ * a target node, and a type that describes the
+ * relationship.  Self-edges are not permitted.
  */
-static int valid_edge_type(EdgeType type)
-{
-    switch (type) {
-        case EDGE_CONTAINS:
-        case EDGE_USES:
-        case EDGE_PARENT_OF:
-            return 1;
-
-        default:
-            return 0;
-    }
-}
+typedef struct {
+    uint64_t  id;
+    uint64_t  source;
+    uint64_t  target;
+    EdgeType  type;
+} GraphEdge;
 
 /*
- * Grow the node pointer array.
+ * The top-level graph container.
+ *
+ * Stores dynamically growing arrays of node and edge
+ * pointers, along with bookkeeping for capacity and
+ * auto-incrementing IDs (starting at 1; 0 is reserved
+ * as the invalid/non-existent sentinel).
  */
-static int grow_nodes(Graph *graph)
-{
-    if (!graph)
-        return -1;
+typedef struct {
+    GraphNode **nodes;
+    size_t      node_count;
+    size_t      node_capacity;
+    uint64_t    next_node_id;
 
-    /*
-     * Prevent integer overflow when doubling capacity.
-     */
-    if (graph->node_capacity >
-        SIZE_MAX / 2 / sizeof(GraphNode *))
-        return -1;
-
-    size_t new_capacity = graph->node_capacity * 2;
-
-    GraphNode **new_nodes =
-        realloc(
-            graph->nodes,
-            new_capacity * sizeof(GraphNode *)
-        );
-
-    if (!new_nodes)
-        return -1;
-
-    graph->nodes = new_nodes;
-    graph->node_capacity = new_capacity;
-
-    return 0;
-}
-
-/*
- * Grow the edge pointer array.
- */
-static int grow_edges(Graph *graph)
-{
-    if (!graph)
-        return -1;
-
-    /*
-     * Prevent integer overflow when doubling capacity.
-     */
-    if (graph->edge_capacity >
-        SIZE_MAX / 2 / sizeof(GraphEdge *))
-        return -1;
-
-    size_t new_capacity = graph->edge_capacity * 2;
-
-    GraphEdge **new_edges =
-        realloc(
-            graph->edges,
-            new_capacity * sizeof(GraphEdge *)
-        );
-
-    if (!new_edges)
-        return -1;
-
-    graph->edges = new_edges;
-    graph->edge_capacity = new_capacity;
-
-    return 0;
-}
+    GraphEdge **edges;
+    size_t      edge_count;
+    size_t      edge_capacity;
+    uint64_t    next_edge_id;
+} Graph;
 
 /*
  * Create an empty graph.
+ * Returns NULL on allocation failure.
  */
-Graph *graph_create(void)
-{
-    Graph *graph = malloc(sizeof(Graph));
+Graph *graph_create(void);
 
-    if (!graph)
-        return NULL;
+/*
+ * Destroy the graph and free all associated memory
+ * (nodes, edges, names, and the graph itself).
+ * Safe to call with NULL.
+ */
+void graph_destroy(Graph *graph);
 
-    graph->nodes =
-        calloc(
-            INITIAL_CAPACITY,
-            sizeof(GraphNode *)
-        );
+/*
+ * Add a node with the given type and name.
+ * The graph takes ownership of a copy of the name string.
+ * Returns the new node, or NULL on failure.
+ */
+GraphNode *graph_add_node(
+    Graph      *graph,
+    NodeType    type,
+    const char *name
+);
 
-    graph->edges =
-        calloc(
-            INITIAL_CAPACITY,
-            sizeof(GraphEdge *)
-        );
+/*
+ * Add a directed edge between two existing nodes.
+ * Both source and target must be valid non-zero IDs
+ * of nodes already in the graph, and must differ.
+ * Returns the new edge, or NULL on failure.
+ */
+GraphEdge *graph_add_edge(
+    Graph    *graph,
+    uint64_t  source,
+    uint64_t  target,
+    EdgeType  type
+);
 
-    if (!graph->nodes || !graph->edges) {
-        free(graph->nodes);
-        free(graph->edges);
-        free(graph);
-        return NULL;
-    }
+/*
+ * Find a node by its ID.
+ * Returns the node, or NULL if not found.
+ */
+GraphNode *graph_find_node(
+    Graph    *graph,
+    uint64_t  id
+);
 
-    graph->node_count = 0;
-    graph->node_capacity = INITIAL_CAPACITY;
+/*
+ * Delete a node by its ID.
+ *
+ * Also removes every edge that references the node
+ * (as source or target).  Returns 0 on success, -1 on
+ * failure (NULL graph, invalid ID, node not found).
+ */
+int graph_delete_node(
+    Graph    *graph,
+    uint64_t  id
+);
 
-    graph->edge_count = 0;
-    graph->edge_capacity = INITIAL_CAPACITY;
+/*
+ * Delete an edge by its ID.
+ * Returns 0 on success, -1 on failure.
+ */
+int graph_delete_edge(
+    Graph    *graph,
+    uint64_t  id
+);
 
-    /*
-     * IDs start at
+/*
+ * A caller-owned list of node pointers returned by
+ * query functions.
+ *
+ * The pointers inside 'items' still belong to the
+ * Graph — the caller must free only the NodeList
+ * itself via graph_node_list_free().
+ */
+typedef struct {
+    GraphNode **items;
+    size_t      count;
+} NodeList;
+
+/*
+ * Free a NodeList returned by a query function.
+ * Does NOT free the nodes themselves.
+ * Safe to call with NULL.
+ */
+void graph_node_list_free(NodeList *list);
+
+/*
+ * Return every node that is the target of an edge
+ * whose source is the given node ID.
+ *
+ * Caller must free the result with graph_node_list_free().
+ * Returns NULL on failure.
+ */
+NodeList *graph_find_children(
+    Graph    *graph,
+    uint64_t  id
+);
+
+/*
+ * Return the first node found that is the source of an
+ * edge whose target is the given node ID.
+ *
+ * Returns the parent node, or NULL if none exists.
+ */
+GraphNode *graph_find_parent(
+    Graph    *graph,
+    uint64_t  id
+);
+
+/*
+ * Find the first node whose name matches the given
+ * string (exact, case-sensitive match).
+ *
+ * Returns the node, or NULL if not found.
+ */
+GraphNode *graph_find_node_by_name(
+    Graph      *graph,
+    const char *name
+);
+
+#endif /* GRAPH_H */
