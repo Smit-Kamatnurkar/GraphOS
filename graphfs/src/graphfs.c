@@ -158,7 +158,14 @@ static int gfs_getattr(const char *path, struct stat *stbuf, struct fuse_file_in
         printf("[GraphFS] getattr: resolved \"%s\" -> DIRECTORY node (id=%lu)\n", path, (unsigned long)node->id);
     } else if (node->type == NODE_FILE) {
         stbuf->st_mode = S_IFREG | 0644;
-        stbuf->st_nlink = 1;
+        
+        GraphFSContext *ctx = (GraphFSContext *)fuse_get_context()->private_data;
+        int links = 0;
+        for (size_t i = 0; i < ctx->graph->edge_count; i++) {
+            if (ctx->graph->edges[i] && ctx->graph->edges[i]->target == node->id) links++;
+        }
+        stbuf->st_nlink = links;
+
         FileContent *fc = get_file_content(node->id);
         stbuf->st_size = fc ? fc->size : 0;
         printf("[GraphFS] getattr: resolved \"%s\" -> FILE node (id=%lu)\n", path, (unsigned long)node->id);
@@ -305,13 +312,39 @@ static int gfs_unlink(const char *path) {
     if (!node) return -ENOENT;
     if (node->type != NODE_FILE) return -EISDIR;
 
+    GraphNode *parent;
+    char *name;
+    get_parent_and_name(path, &parent, &name);
+    free(name);
+
     GraphFSContext *ctx = (GraphFSContext *)fuse_get_context()->private_data;
     uint64_t id = node->id;
     
-    remove_file_content(id);
-    graph_delete_node(ctx->graph, id); // cascades edge deletion
+    // Find and delete the specific edge from this parent to the file
+    for (size_t i = 0; i < ctx->graph->edge_count; i++) {
+        if (ctx->graph->edges[i] && ctx->graph->edges[i]->source == parent->id && ctx->graph->edges[i]->target == id) {
+            graph_delete_edge(ctx->graph, ctx->graph->edges[i]->id);
+            break;
+        }
+    }
+
+    // Check if the node has any other parents left
+    int has_parents = 0;
+    for (size_t i = 0; i < ctx->graph->edge_count; i++) {
+        if (ctx->graph->edges[i] && ctx->graph->edges[i]->target == id) {
+            has_parents = 1;
+            break;
+        }
+    }
+
+    if (!has_parents) {
+        remove_file_content(id);
+        graph_delete_node(ctx->graph, id);
+        printf("[GraphFS] unlink: Deleted FILE node (id=%lu)\n", (unsigned long)id);
+    } else {
+        printf("[GraphFS] unlink: Removed edge, but FILE node (id=%lu) remains linked elsewhere\n", (unsigned long)id);
+    }
     
-    printf("[GraphFS] unlink: Deleted FILE node \"%s\" (id=%lu)\n", path, (unsigned long)id);
     return 0;
 }
 
@@ -384,6 +417,23 @@ static int gfs_utimens(const char *path, const struct timespec tv[2], struct fus
     return 0; // Dummy implementation so `touch` doesn't throw "Function not implemented"
 }
 
+static int gfs_link(const char *from, const char *to) {
+    GraphNode *target = resolve_path(from);
+    if (!target) return -ENOENT;
+
+    GraphNode *new_parent;
+    char *new_name;
+    int res = get_parent_and_name(to, &new_parent, &new_name);
+    if (res != 0) return res;
+
+    GraphFSContext *ctx = (GraphFSContext *)fuse_get_context()->private_data;
+    graph_add_edge(ctx->graph, new_parent->id, target->id, EDGE_CONTAINS);
+    
+    printf("[GraphFS] link: Added new CONTAINS edge (%lu -> %lu)\n", (unsigned long)new_parent->id, (unsigned long)target->id);
+    free(new_name);
+    return 0;
+}
+
 static const struct fuse_operations gfs_oper = {
     .init       = gfs_init,
     .destroy    = gfs_destroy,
@@ -397,6 +447,7 @@ static const struct fuse_operations gfs_oper = {
     .rmdir      = gfs_rmdir,
     .rename     = gfs_rename,
     .utimens    = gfs_utimens,
+    .link       = gfs_link,
 };
 
 int main(int argc, char *argv[]) {
