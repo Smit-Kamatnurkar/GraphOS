@@ -19,12 +19,13 @@ TEST_OBJ = $(BUILD)/test.o
 # ── Targets ──────────────────────────────────────────
 LIB      = $(BUILD)/libgraph.a
 TEST_BIN = $(BUILD)/graph_test
+GRAPHFS_BIN = $(BUILD)/graphfs
 
 # ═══════════════════════════════════════════════════════
 # Default: build everything
 # ═══════════════════════════════════════════════════════
 .PHONY: all
-all: $(TEST_BIN)
+all: $(TEST_BIN) $(GRAPHFS_BIN)
 
 # ── Static library ───────────────────────────────────
 $(CORE_OBJ): $(CORE_SRC) graph-core/include/graph.h | $(BUILD)
@@ -39,6 +40,18 @@ $(TEST_OBJ): $(TEST_SRC) graph-core/include/graph.h | $(BUILD)
 
 $(TEST_BIN): $(TEST_OBJ) $(LIB)
 	$(CC) $(CFLAGS) $^ -o $@
+
+# ── GraphFS (FUSE 3) ────────────────────────────────
+GRAPHFS_SRC = graphfs/src/graphfs.c
+GRAPHFS_OBJ = $(BUILD)/graphfs.o
+FUSE_CFLAGS = $(shell pkg-config --cflags fuse3)
+FUSE_LIBS   = $(shell pkg-config --libs fuse3)
+
+$(GRAPHFS_OBJ): $(GRAPHFS_SRC) graph-core/include/graph.h | $(BUILD)
+	$(CC) $(CFLAGS) $(FUSE_CFLAGS) -c $< -o $@
+
+$(GRAPHFS_BIN): $(GRAPHFS_OBJ) $(LIB)
+	$(CC) $(CFLAGS) $^ $(FUSE_LIBS) -o $@
 
 # ── Build directory ──────────────────────────────────
 $(BUILD):
@@ -58,4 +71,4 @@ test: $(TEST_BIN)
 # ═══════════════════════════════════════════════════════
 .PHONY: clean
 clean:
-	rm -f $(BUILD)/*.o $(BUILD)/*.a $(BUILD)/graph_test
+	rm -f $(BUILD)/*.o $(BUILD)/*.a $(BUILD)/graph_test $(BUILD)/graphfs
