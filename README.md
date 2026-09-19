@@ -61,3 +61,15 @@ flowchart TD
     P -->|accesses| D["Device"]
     P -->|creates| N["Network Socket"]
     P -->|depends on| S["System Service"]
+
+### The `graphctl` Command Reference
+`graphctl` is the custom command-line interface for GraphOS. Instead of relying on legacy POSIX commands (like `mkdir` or `ln`), it translates user commands directly into native graph operations via a virtual kernel control channel (`/.graph_cmd`).
+
+* `spawn-dir <path>`: Creates a new DIRECTORY node.
+* `spawn-file <path> <content>`: Creates a new FILE node with data buffer.
+* `read-node <path>`: Retrieves the data buffer from a FILE node.
+* `draw-edge <src> <dest>`: Draws a new CONTAINS edge to an existing node (enables native graph hardlinking without duplicating data).
+* `sever-edge <path>`: Deletes a single CONTAINS edge. Keeps the node alive if it still has incoming edges from other nodes.
+* `sever-all-edges <path>`: Global force-delete. Sends a SEVER_ALL signal through the control channel, destroying the node entirely and cascading to destroy ALL edges pointing to it anywhere in the OS.
+* `destroy-node <path>`: Destroys an empty DIRECTORY node.
+* `inspect-graph`: Dumps the raw graph state (Nodes and Edges) directly from memory to visualize the true architecture.

@@ -148,6 +148,16 @@ static int gfs_getattr(const char *path, struct stat *stbuf, struct fuse_file_in
         stbuf->st_atime = stbuf->st_mtime = stbuf->st_ctime = time(NULL);
         return 0;
     }
+    
+    if (strcmp(path, "/.graph_cmd") == 0) {
+        stbuf->st_mode = S_IFREG | 0222; // Write only control channel
+        stbuf->st_nlink = 1;
+        stbuf->st_size = 0;
+        stbuf->st_uid = fuse_get_context()->uid;
+        stbuf->st_gid = fuse_get_context()->gid;
+        stbuf->st_atime = stbuf->st_mtime = stbuf->st_ctime = time(NULL);
+        return 0;
+    }
 
     GraphNode *node = resolve_path(path);
     if (!node) return -ENOENT;
@@ -242,6 +252,26 @@ static int gfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 
 static int gfs_write(const char *path, const char *buf, size_t size, off_t offset, struct fuse_file_info *fi) {
     (void) fi;
+    
+    if (strcmp(path, "/.graph_cmd") == 0) {
+        GraphFSContext *ctx = (GraphFSContext *)fuse_get_context()->private_data;
+        if (strncmp(buf, "SEVER_ALL ", 10) == 0) {
+            char target[1024] = {0};
+            size_t len = size - 10;
+            if (len >= 1024) len = 1023;
+            strncpy(target, buf + 10, len);
+            
+            GraphNode *node = resolve_path(target);
+            if (node) {
+                uint64_t id = node->id;
+                if (node->type == NODE_FILE) remove_file_content(id);
+                graph_delete_node(ctx->graph, id); // cascades all edges globally!
+                printf("[GraphFS] sever-all: Forcefully destroyed node (id=%lu) and ALL its global edges\n", (unsigned long)id);
+            }
+        }
+        return size;
+    }
+
     GraphNode *node = resolve_path(path);
     if (!node) return -ENOENT;
     if (node->type != NODE_FILE) return -EISDIR;

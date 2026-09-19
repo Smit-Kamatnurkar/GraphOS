@@ -20,12 +20,13 @@ TEST_OBJ = $(BUILD)/test.o
 LIB      = $(BUILD)/libgraph.a
 TEST_BIN = $(BUILD)/graph_test
 GRAPHFS_BIN = $(BUILD)/graphfs
+GRAPHCTL_BIN = $(BUILD)/graphctl
 
 # ═══════════════════════════════════════════════════════
 # Default: build everything
 # ═══════════════════════════════════════════════════════
 .PHONY: all
-all: $(TEST_BIN) $(GRAPHFS_BIN)
+all: $(TEST_BIN) $(GRAPHFS_BIN) $(GRAPHCTL_BIN)
 
 # ── Static library ───────────────────────────────────
 $(CORE_OBJ): $(CORE_SRC) graph-core/include/graph.h | $(BUILD)
@@ -53,6 +54,13 @@ $(GRAPHFS_OBJ): $(GRAPHFS_SRC) graph-core/include/graph.h | $(BUILD)
 $(GRAPHFS_BIN): $(GRAPHFS_OBJ) $(LIB)
 	$(CC) $(CFLAGS) $^ $(FUSE_LIBS) -o $@
 
+# ── graphctl (CLI Tool) ──────────────────────────────
+GRAPHCTL_SRC = graphctl/src/graphctl.c
+GRAPHCTL_BIN = $(BUILD)/graphctl
+
+$(GRAPHCTL_BIN): $(GRAPHCTL_SRC) | $(BUILD)
+	$(CC) $(CFLAGS) $< -o $@
+
 # ── Build directory ──────────────────────────────────
 $(BUILD):
 	mkdir -p $(BUILD)
@@ -71,4 +79,4 @@ test: $(TEST_BIN)
 # ═══════════════════════════════════════════════════════
 .PHONY: clean
 clean:
-	rm -f $(BUILD)/*.o $(BUILD)/*.a $(BUILD)/graph_test $(BUILD)/graphfs
+	rm -f $(BUILD)/*.o $(BUILD)/*.a $(BUILD)/graph_test $(BUILD)/graphfs $(BUILD)/graphctl
