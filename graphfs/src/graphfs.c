@@ -2,6 +2,32 @@
 #define _DEFAULT_SOURCE
 #define FUSE_USE_VERSION 31
 
+/**
+ * @file graphfs.c
+ * @brief GraphOS FUSE3 Filesystem Implementation
+ * 
+ * This file contains the userspace filesystem translation layer for GraphOS.
+ * It leverages libfuse3 to intercept standard POSIX filesystem calls and maps
+ * them directly into native Graph Engine operations. 
+ * 
+ * Traditional operating systems rely on hierarchical inode tables and block 
+ * storage metadata. GraphFS abandons this in favor of a unified DAG 
+ * (Directed Acyclic Graph) architecture. 
+ * 
+ * Key architectural mappings:
+ * - Directories -> NODE_DIRECTORY 
+ * - Files       -> NODE_FILE
+ * - Hierarchy   -> EDGE_CONTAINS relationships
+ * - Hardlinks   -> Multiple EDGE_CONTAINS pointing to the same node ID
+ * 
+ * The graph is entirely memory-resident during Phase 2. Memory buffers are 
+ * allocated per file node to handle read/write streams. Edge deletions 
+ * automatically cascade through the graph engine.
+ * 
+ * @author GraphOS Development Team
+ * @date 2026
+ */
+
 #include <fuse3/fuse.h>
 #include <sys/stat.h>
 #include <sys/types.h>
