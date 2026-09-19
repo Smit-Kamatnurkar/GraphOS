@@ -61,6 +61,7 @@ flowchart TD
     P -->|accesses| D["Device"]
     P -->|creates| N["Network Socket"]
     P -->|depends on| S["System Service"]
+```
 
 ### The `graphctl` Command Reference
 `graphctl` is the custom command-line interface for GraphOS. Instead of relying on legacy POSIX commands (like `mkdir` or `ln`), it translates user commands directly into native graph operations via a virtual kernel control channel (`/.graph_cmd`).
