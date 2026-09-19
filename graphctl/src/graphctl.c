@@ -1,3 +1,26 @@
+/**
+ * @file graphctl.c
+ * @brief GraphOS Native Command-Line Control Interface
+ *
+ * graphctl is the official user-space control binary for GraphOS. Rather than 
+ * relying on legacy POSIX hierarchical file manipulation binaries (like mkdir, 
+ * ln, or rm), graphctl provides a vocabulary explicitly designed for graph operations.
+ *
+ * It communicates with the GraphFS engine via a virtual control channel (`/.graph_cmd`).
+ * This channel allows user-space programs to trigger kernel-level graph cascades,
+ * such as the SEVER_ALL signal, which cannot be represented via standard VFS syscalls.
+ * 
+ * Features:
+ * - Direct Node Instantiation (spawn-dir, spawn-file)
+ * - Raw Edge Creation (draw-edge) for zero-copy file linking
+ * - Granular Relationship Destruction (sever-edge)
+ * - Global Node Annihilation (sever-all-edges)
+ * - Live State Introspection (inspect-graph)
+ *
+ * @author GraphOS Development Team
+ * @version 1.0.0
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
